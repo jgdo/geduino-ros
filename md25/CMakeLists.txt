@@ -45,3 +45,10 @@ add_executable(md25_node src/md25_node.cpp src/odometry.cpp src/md25.cpp)
 target_link_libraries(md25_node
   ${catkin_LIBRARIES}
 )
+
+## Mark executables for installation
+## See http://docs.ros.org/melodic/api/catkin/html/howto/format1/building_executables.html
+install(TARGETS md25_node
+   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+

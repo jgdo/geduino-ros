@@ -95,6 +95,7 @@ double covK1;
 double covK2;
 double yawSpeedVariance;
 bool publishOdomTransformation;
+int acceleration;
 
 // The last encoder values
 uint32_t lastEncoder1 = 0;
@@ -123,6 +124,9 @@ tf::TransformBroadcaster * odometryTransformBroadcasterPtr;
 
 // The odometry transformation
 geometry_msgs::TransformStamped odometryTransformation;
+
+ros::Timer velocityTimeoutTimer;
+double velocityTimeoutDuration = 0;
 
 void publishDiagnostics(uint8_t level, std::string message) {
 
@@ -202,6 +206,17 @@ void cmdVelCallback(const geometry_msgs::Twist::ConstPtr & cmdVelMessage) {
 
 	}
 
+	// reset timer
+        velocityTimeoutTimer.stop();
+	if(speed1 != 128 && speed2 != 128) {
+		velocityTimeoutTimer.start();
+	}
+}
+
+void velocityTimeoutCallback(const ros::TimerEvent&) {
+	md25Ptr->setSpeed1(128);
+	md25Ptr->setSpeed2(128);
+	ROS_INFO("Velocity inactive timeout, stopping robot");
 }
 
 void updateOdometry() {
@@ -349,6 +364,9 @@ int main(int argc, char** argv) {
 	privateNodeHandle.param("cov_k2", covK2, 0.001);
 	privateNodeHandle.param("yaw_speed_variance", yawSpeedVariance, 0.06);
     privateNodeHandle.param("publish_odom_transformation", publishOdomTransformation, true);
+	privateNodeHandle.param("velocity_timeout", velocityTimeoutDuration, 0.5);
+	privateNodeHandle.param("acceleration", acceleration, 5);
+	
 
 	// Log
 	ROS_INFO("broadcasting transformation %s -> %s", odomFrame.c_str(), baseFrame.c_str());
@@ -410,8 +428,8 @@ int main(int argc, char** argv) {
 
 	// Setting up md25
 	result = (md25.init() == MD25_RESPONSE_OK &&
-		md25.setAcceleration(1) == MD25_RESPONSE_OK &&
-		md25.disableTimeout() == MD25_RESPONSE_OK &&
+		md25.setAcceleration(acceleration) == MD25_RESPONSE_OK &&
+		// md25.disableTimeout() == MD25_RESPONSE_OK &&
 		md25.setMode(0) == MD25_RESPONSE_OK &&
 		md25.setSpeed1(128) == MD25_RESPONSE_OK &&
 		md25.setSpeed2(128) == MD25_RESPONSE_OK) ? MD25_RESPONSE_OK : MD25_RESPONSE_ERROR;
@@ -427,6 +445,9 @@ int main(int argc, char** argv) {
 		return -1;
 
 	}
+	
+	// create one-shot deactivated timer for velocity command timeout
+	velocityTimeoutTimer = nodeHandle.createTimer(ros::Duration(velocityTimeoutDuration), velocityTimeoutCallback, true, false);
 
 	// Define odometry rate and diagnostic duration
 	ros::Rate odometryRate(odometryFrequency);
